@@ -9,4 +9,8 @@ pub enum Message {
     ClipboardChanged(clipboard::ClipboardEntry),
     RemoveHistory(usize),
     CopyFromHistory(usize),
+    EditableInputToggled(bool),
+    EditableInputChanged(String),
+    EditToggled(cosmic::widget::Id),
+    EditableInputSubmitted(String),
 }

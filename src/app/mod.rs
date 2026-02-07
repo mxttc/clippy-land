@@ -1,5 +1,4 @@
 mod handlers;
-mod icons;
 mod messages;
 mod model;
 mod view;

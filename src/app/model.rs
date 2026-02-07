@@ -9,4 +9,5 @@ pub struct AppModel {
     pub(super) popup: Option<Id>,
     /// Latest clipboard entries, newest-first.
     pub(super) history: VecDeque<clipboard::ClipboardEntry>,
+    pub(super) editing_entry: Option<cosmic::widget::Id>,
 }

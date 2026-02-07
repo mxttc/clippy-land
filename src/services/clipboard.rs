@@ -1,6 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io::{Cursor, Read};
+use crate::fl;
 
 use wl_clipboard_rs::{
     copy::{MimeType as CopyMimeType, Options as CopyOptions, Source},
@@ -10,8 +11,16 @@ use wl_clipboard_rs::{
 const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 const THUMBNAIL_SIZE_PX: u32 = 40;
 
+#[derive(Debug,Clone)]
+pub struct ClipboardEntry {
+    pub title: String,
+    pub content: ClipboardContent, // String or Image
+    pub widget_id: cosmic::widget::Id,
+    pub editing: bool,
+}
+
 #[derive(Debug, Clone)]
-pub enum ClipboardEntry {
+pub enum ClipboardContent {
     Text(String),
     Image {
         mime: String,
@@ -21,11 +30,32 @@ pub enum ClipboardEntry {
     },
 }
 
-impl ClipboardEntry {
+// #[derive(Debug, Clone)]
+// pub enum ClipboardEntry {
+//     Text(ClipboardText),
+//     Image {
+//         mime: String,
+//         bytes: Vec<u8>,
+//         hash: u64,
+//         thumbnail_png: Option<Vec<u8>>,
+//     },
+// }
+
+// #[derive(Debug, Clone)]
+// pub struct ClipboardText {
+//     pub title: String,
+//     pub content: String,
+//     pub widget_id: cosmic::widget::Id,
+//     pub editing: bool,
+// }
+
+impl ClipboardContent {
     pub fn fingerprint(&self) -> ClipboardFingerprint {
         match self {
-            ClipboardEntry::Text(text) => ClipboardFingerprint::Text(text.clone()),
-            ClipboardEntry::Image {
+            ClipboardContent::Text(clipboard_content) => {
+                ClipboardFingerprint::Text(clipboard_content.clone())
+            },
+            ClipboardContent::Image {
                 mime,
                 bytes,
                 hash,
@@ -39,18 +69,18 @@ impl ClipboardEntry {
     }
 }
 
-impl PartialEq for ClipboardEntry {
+impl PartialEq for ClipboardContent {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ClipboardEntry::Text(a), ClipboardEntry::Text(b)) => a == b,
+            (ClipboardContent::Text(a), ClipboardContent::Text(b)) => a == b,
             (
-                ClipboardEntry::Image {
+                ClipboardContent::Image {
                     mime: am,
                     bytes: ab,
                     hash: ah,
                     ..
                 },
-                ClipboardEntry::Image {
+                ClipboardContent::Image {
                     mime: bm,
                     bytes: bb,
                     hash: bh,
@@ -62,7 +92,7 @@ impl PartialEq for ClipboardEntry {
     }
 }
 
-impl Eq for ClipboardEntry {}
+impl Eq for ClipboardContent {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipboardFingerprint {
@@ -75,8 +105,50 @@ pub enum ClipboardFingerprint {
 }
 
 pub fn read_clipboard_entry() -> Option<ClipboardEntry> {
-    read_clipboard_image().or_else(|| read_clipboard_text().map(ClipboardEntry::Text))
+    let clipboard_image = read_clipboard_image();
+
+    if clipboard_image.is_some() {
+        let clipboard_image = clipboard_image.unwrap();
+
+        return Some(ClipboardEntry {
+            title: fl!("clipboard-image"),
+            content: clipboard_image,
+            widget_id: cosmic::widget::Id::unique(),
+            editing: false,
+        });
+    }
+
+    let clipboard_text = read_clipboard_text();
+    if clipboard_text.is_some() {
+        let clipboard_text = clipboard_text.unwrap();
+
+        return Some(ClipboardEntry {
+            title: summarize_one_line(&clipboard_text), 
+            content: ClipboardContent::Text(clipboard_text), 
+            widget_id: cosmic::widget::Id::unique(), 
+            editing: false 
+        })
+    }
+
+    None
 }
+
+fn summarize_one_line(text: &String) -> String {
+    let mut line = text
+        .lines()
+        .map(|line| line.trim_start())
+        .find(|line| !line.is_empty())
+        .unwrap_or("")
+        .trim_end()
+        .to_string();
+    const MAX_CHARS: usize = 25;
+    if line.chars().count() > MAX_CHARS {
+        line = line.chars().take(MAX_CHARS - 1).collect::<String>();
+        line.push('…');
+    }
+    line
+}
+
 
 pub fn read_clipboard_text() -> Option<String> {
     let result = get_contents(
@@ -116,7 +188,7 @@ pub fn read_clipboard_text() -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-pub fn read_clipboard_image() -> Option<ClipboardEntry> {
+pub fn read_clipboard_image() -> Option<ClipboardContent> {
     // Try common image formats first.
     const IMAGE_MIMES: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
 
@@ -158,7 +230,7 @@ pub fn read_clipboard_image() -> Option<ClipboardEntry> {
 
         let thumbnail_png = make_thumbnail_png(&actual_mime, &bytes);
 
-        return Some(ClipboardEntry::Image {
+        return Some(ClipboardContent::Image {
             mime: actual_mime,
             bytes,
             hash,
