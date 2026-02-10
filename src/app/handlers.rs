@@ -47,12 +47,17 @@ pub fn subscription(_app: &AppModel) -> Subscription<Message> {
     )])
 }
 
+pub fn on_clear_history(app: &mut AppModel) {
+    app.history.clear()
+}
+
 pub fn update(app: &mut AppModel, message: Message) -> Task<cosmic::Action<Message>> {
     match message {
         Message::ClipboardChanged(entry) => if let Some(value) = on_clipboard_changed(app, &entry) {
             return value;
         }
         Message::CopyFromHistory(widget_id) => on_copy_from_history(app, widget_id),
+        Message::ClearHistory => on_clear_history(app),
         Message::RemoveHistory(widget_id) => on_remove_from_history(app, widget_id),
         Message::EditToggled(widget_id) => if let Some(value) = on_edit_toggled(app, widget_id) {
             return value;

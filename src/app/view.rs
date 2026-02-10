@@ -5,7 +5,7 @@ use cosmic::applet::menu_button;
 use cosmic::iced::widget::image::Handle as ImageHandle;
 use cosmic::iced::{Alignment, Length, window::Id};
 use cosmic::prelude::*;
-use cosmic::widget::{self, Widget};
+use cosmic::widget::{self, ListColumn, Widget};
 use crate::services::clipboard::ClipboardEntry;
 
 pub fn view(app: &AppModel) -> Element<'_, Message> {
@@ -80,77 +80,89 @@ pub fn view_clipboard_entry<'a>(app: &AppModel, entry: &'a ClipboardEntry) -> El
     }
 }
 
+pub fn create_clipboard_row<'a>(app: &AppModel, id: &cosmic::widget::Id, item: &'a ClipboardEntry) -> Element<'a, Message> {
+    let label = view_clipboard_entry(&app, &item);
+
+    // TODO : Swap out for save button if the entry is being edited
+    let edit_button = match &item.content {
+        clipboard::ClipboardContent::Text(clipboard_text) => {
+            widget::button::icon(widget::icon::from_name("edit-symbolic").handle())
+                .tooltip(fl!("edit-title"))
+                .on_press(Message::EditToggled(id.clone()))
+                .extra_small()
+                .width(Length::Shrink)
+        }
+        _ => widget::button::icon(widget::icon::from_name("edit-symbolic").handle())
+            .tooltip(fl!("edit-title"))
+            .on_press(Message::EditToggled(id.clone()))
+            .extra_small()
+            .width(Length::Shrink)
+    };
+
+    let save_button = match &item.content {
+        clipboard::ClipboardContent::Text(clipboard_text) => {
+            widget::button::icon(widget::icon::from_name("document-save-symbolic").handle())
+                .tooltip(fl!("save-title"))
+                .on_press(Message::EditToggled(item.widget_id.clone()))
+                .extra_small()
+                .width(Length::Shrink)
+        }
+        _ => widget::button::icon(widget::icon::from_name("document-save-symbolic").handle())
+            .tooltip(fl!("save-title"))
+            .extra_small()
+            .width(Length::Shrink)
+    };
+    let remove_button =
+        widget::button::icon(widget::icon::from_name("edit-delete-symbolic").handle())
+            .tooltip(fl!("remove"))
+            .on_press(Message::RemoveHistory(item.widget_id.clone()))
+            .extra_small()
+            .width(Length::Shrink);
+
+
+    widget::row::Row::new()
+        .spacing(8)
+        .padding([4, 0])
+        .align_y(Alignment::Center)
+        .push(label)
+        .push(if app.editing_entry == Some(item.widget_id.clone()) { save_button } else { edit_button })
+        .push(remove_button)
+        .width(Length::Fill)
+        .into()
+}
+
 pub fn view_window(app: &AppModel, _id: Id) -> Element<'_, Message> {
     let mut content = widget::list_column().padding([8, 0]).spacing(0);
 
     if app.history.is_empty() {
-        content = content.add(widget::text::body(fl!("empty")));
-    } else {
-        for (id, item) in app.history.as_slice() {
-            let label = view_clipboard_entry(&app, &item);
-
-            // TODO : Swap out for save button if the entry is being edited
-            let edit_button = match &item.content {
-                clipboard::ClipboardContent::Text(clipboard_text) => {
-                    widget::button::icon(widget::icon::from_name("edit-symbolic").handle())
-                        .tooltip(fl!("edit-title"))
-                        .on_press(Message::EditToggled(id.clone()))
-                        .extra_small()
-                        .width(Length::Shrink)
-                }
-                _ => widget::button::icon(widget::icon::from_name("edit-symbolic").handle())
-                    .tooltip(fl!("edit-title"))
-                    .on_press(Message::EditToggled(id.clone()))
-                    .extra_small()
-                    .width(Length::Shrink)
-            };
-
-            let save_button = match &item.content {
-                clipboard::ClipboardContent::Text(clipboard_text) => {
-                    widget::button::icon(widget::icon::from_name("document-save-symbolic").handle())
-                        .tooltip(fl!("save-title"))
-                        .on_press(Message::EditToggled(item.widget_id.clone()))
-                        .extra_small()
-                        .width(Length::Shrink)
-                }
-                _ => widget::button::icon(widget::icon::from_name("document-save-symbolic").handle())
-                    .tooltip(fl!("save-title"))
-                    .extra_small()
-                    .width(Length::Shrink)
-            };
-        
-        // TODO : Change RemoveHistory to work with widgetId
-            let remove_button =
-                widget::button::icon(widget::icon::from_name("edit-delete-symbolic").handle())
-                    .tooltip(fl!("remove"))
-                    .on_press(Message::RemoveHistory(item.widget_id.clone()))
-                    .extra_small()
-                    .width(Length::Shrink);
-            content = content.add(
-                widget::row::Row::new()
-                    .spacing(8)
-                    .padding([4, 0])
-                    .align_y(Alignment::Center)
-                    .push(label)
-                    .push(if app.editing_entry == Some(item.widget_id.clone()) { save_button } else { edit_button })
-                    .push(remove_button)
-                    .width(Length::Fill),
-            );
-        }
+        return content.add(widget::text::body(fl!("empty"))).into();
     }
 
-    // Add a fixed height with scrolling when there are many items
-    let content = if app.history.len() > 5 {
-        widget::scrollable(content)
-            .width(Length::Fill)
-            .height(Length::Fixed(400.0))
-    } else {
-        widget::scrollable(content)
-            .width(Length::Fill)
-            .height(Length::Shrink)
-    };
+    let clear_history = menu_button(widget::text::body("Clear Clipboard History"))
+        .on_press(Message::ClearHistory);
 
-    let content = widget::container(content).padding([8, 8]);
+    let clear_history_row = widget::row::Row::new()
+        .spacing(8)
+        .padding([4, 0])
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
+        .push(clear_history);
 
-    app.core.applet.popup_container(content).into()
+    let content = content.add(clear_history_row);
+
+    let content = app.history.iter().fold(content, |accumulator, entry_row| {
+        let (id, item) = entry_row;
+        let element = accumulator.add(create_clipboard_row(&app, id, item));
+
+        element
+    });
+
+    app.core.applet.popup_container(
+        content
+            .apply(widget::container)
+                .padding([8, 8])
+            .apply(widget::scrollable)
+                .width(Length::Fill)
+                .height(if app.history.len() > 5 { Length::Fixed(400.0) } else { Length::Shrink })
+    ).into()
 }

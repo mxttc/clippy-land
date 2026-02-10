@@ -8,6 +8,7 @@ pub enum Message {
     TogglePopup,
     PopupClosed(iced_core::window::Id),
     ClipboardChanged(clipboard::ClipboardEntry),
+    ClearHistory,
     RemoveHistory(cosmic::widget::Id), // TODO: Verify remove history still works after this change
     CopyFromHistory(cosmic::widget::Id),
     EditableInputToggled(bool),
