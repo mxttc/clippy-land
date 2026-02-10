@@ -7,7 +7,8 @@ use futures_util::SinkExt;
 use std::time::Duration;
 use cosmic::Action;
 use cosmic::widget::Id;
-use crate::services::clipboard::ClipboardEntry;
+use indexmap::IndexMap;
+use crate::services::clipboard::{ClipboardContent, ClipboardEntry};
 
 const MAX_HISTORY: usize = 30;
 
@@ -51,20 +52,31 @@ pub fn update(app: &mut AppModel, message: Message) -> Task<cosmic::Action<Messa
         Message::ClipboardChanged(entry) => if let Some(value) = on_clipboard_changed(app, &entry) {
             return value;
         }
-        Message::CopyFromHistory(index) => on_copy_from_history(app, index),
-        Message::RemoveHistory(index) => on_remove_from_history(app, index),
+        Message::CopyFromHistory(widget_id) => on_copy_from_history(app, widget_id),
+        Message::RemoveHistory(widget_id) => on_remove_from_history(app, widget_id),
         Message::EditToggled(widget_id) => if let Some(value) = on_edit_toggled(app, widget_id) {
             return value;
         }
         Message::EditableInputChanged(new_value) => {
-            // TODO : Consider using a HashMap based on the widgetId for the main tracking of items
-            app.history.iter_mut().for_each(|entry| {
-                if let clipboard::ClipboardContent::Text(_) = &entry.content {
-                    if Some(entry.widget_id.clone()) == app.editing_entry {
-                        entry.title = new_value.clone();
-                    }
+            if let Some(entry) = app.editing_entry.clone() {
+                // let title = app.history.get_mut(&entry);
+                // if title.is_none() {
+                //     return Task::none();
+                // }
+                //
+                // app.history.ge
+                if let Some(clipboard_entry) = app.history.get_mut(&entry) {
+                    clipboard_entry.title = new_value.clone();
                 }
-            });
+            }
+            // TODO : Consider using a HashMap based on the widgetId for the main tracking of items
+            // app.history.iter_mut().for_each(|entry| {
+            //     if let clipboard::ClipboardContent::Text(_) = &entry.content {
+            //         if Some(entry.widget_id.clone()) == app.editing_entry {
+            //
+            //         }
+            //     }
+            // });
         }
         Message::EditableInputSubmitted(_) => {
             app.editing_entry = None;
@@ -113,12 +125,14 @@ fn on_edit_toggled(app: &mut AppModel, widget_id: Id) -> Option<Task<Action<Mess
     None
 }
 
-fn on_remove_from_history(app: &mut AppModel, index: usize) {
-    let _ = app.history.remove(index);
+fn on_remove_from_history(app: &mut AppModel, widget_id: Id) {
+    app.history.shift_remove(&widget_id);
 }
 
-fn on_copy_from_history(app: &mut AppModel, index: usize) {
-    if let Some(entry) = app.history.get(index) {
+fn on_copy_from_history(app: &mut AppModel, index: Id) {
+    // TODO: Find entry by widgetId
+
+    if let Some(entry) = app.history.get(&index) {
         match &entry.content {
             clipboard::ClipboardContent::Text(clipboard_text) => {
                 _ = clipboard::write_clipboard_text(&clipboard_text);
@@ -131,26 +145,37 @@ fn on_copy_from_history(app: &mut AppModel, index: usize) {
 }
 
 fn on_clipboard_changed(app: &mut AppModel, entry: &ClipboardEntry) -> Option<Task<Action<Message>>> {
-    if app
-        .history
-        .front()
-        .is_some_and(|e: &clipboard::ClipboardEntry| e.content == entry.content)
-    {
-        return Some(Task::none());
-    }
+    // if let clipboard::ClipboardContent::Text(clipboard_text) = &entry.content {
+    //     if should_ignore_clipboard_entry(&clipboard_text) {
+    //         return Some(Task::none());
+    //     }
+    // }
 
-    if let clipboard::ClipboardContent::Text(clipboard_text) = &entry.content {
-        if should_ignore_clipboard_entry(&clipboard_text) {
-            return Some(Task::none());
+
+    if let Some(existing_id) = get_entry_by_value(&app.history, entry.content.clone()) {
+        // Found existing clipboard contents in clipboard history
+        let index_entry = app.history.get_index_entry(existing_id).expect("Should always be able to get it");
+        let index = index_entry.index();
+        app.history.move_index(index, 0);
+    } else {
+        // Did not find existing clipboard contents, let's add it
+        app.history.insert_before(0, entry.widget_id.clone(), entry.clone());
+
+        if app.history.len() > MAX_HISTORY {
+            app.history.pop();
         }
     }
 
-    // Remove any existing entries that match to keep the history unique
-    app.history.retain(|existing| existing.content != entry.content);
-    app.history.push_front(entry.to_owned());
-    while app.history.len() > MAX_HISTORY {
-        app.history.pop_back();
+    None
+}
+
+fn get_entry_by_value(data: &IndexMap<Id, ClipboardEntry>, value: ClipboardContent) -> Option<usize> {
+    for (i, (id, entry)) in data.iter().enumerate() {
+        if value == entry.content {
+            return Some(i);
+        }
     }
+
     None
 }
 

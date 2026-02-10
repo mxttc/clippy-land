@@ -21,7 +21,9 @@ pub fn view_clipboard_entry<'a>(app: &AppModel, entry: &'a ClipboardEntry) -> El
         clipboard::ClipboardContent::Text(ref text) => {
             let is_editable = app.editing_entry == Some(entry.widget_id.clone());
             if !is_editable {
-                widget::text::body(&entry.title).into()
+                menu_button(widget::text::body(&entry.title))
+                    .on_press(Message::CopyFromHistory(entry.widget_id.clone()))
+                    .into()
             } else {
                 let input_id = widget::Id::unique();
                 let mut inline_input = widget::inline_input("Placeholder", &entry.title)
@@ -34,35 +36,22 @@ pub fn view_clipboard_entry<'a>(app: &AppModel, entry: &'a ClipboardEntry) -> El
             }
         },
         clipboard::ClipboardContent::Image { ref mime, ref bytes, .. } => {
-            widget::text::body(fl!("clipboard-image")).into()
-        }
-    }
-}
+            // widget::text::body(fl!("clipboard-image")).into()
+            let is_editable = app.editing_entry == Some(entry.widget_id.clone());
+            if !is_editable {
+                menu_button(widget::text::body(&entry.title))
+                    .on_press(Message::CopyFromHistory(entry.widget_id.clone()))
+                    .into()
+            } else {
+                let input_id = widget::Id::unique();
+                let mut inline_input = widget::inline_input("Placeholder", &entry.title)
+                    .on_input(Message::EditableInputChanged)
+                    .on_submit(Message::EditableInputSubmitted)
+                    .id(entry.widget_id.clone())
+                    .select_on_focus(true);
 
-pub fn view_window(app: &AppModel, _id: Id) -> Element<'_, Message> {
-    let mut content = widget::list_column().padding([8, 0]).spacing(0);
-
-    if app.history.is_empty() {
-        content = content.add(widget::text::body(fl!("empty")));
-    } else {
-        for (idx, item) in app.history.iter().enumerate() {
-            // let label: Element<'_, Message> = match item {
-            //     clipboard::ClipboardEntry::ClipboardContent::Text(clipboard_text) => {
-            //         let is_editable = app.editing_entry == Some(clipboard_text.widget_id.clone());
-            //         if !is_editable {
-            //             widget::text::body(&clipboard_text.title).into()
-            //         } else {
-            //             let input_id = widget::Id::unique();
-            //             let mut inline_input = widget::inline_input("Placeholder", &clipboard_text.title)
-            //                 .on_input(Message::EditableInputChanged)
-            //                 .on_submit(Message::EditableInputSubmitted)
-            //                 .id(clipboard_text.widget_id.clone())
-            //                 .select_on_focus(true);
-            //
-            //             inline_input.into()
-            //         }
-            //
-            //     }
+                inline_input.into()
+            }
             //     clipboard::ClipboardEntry::Image {
             //         mime,
             //         bytes,
@@ -87,21 +76,31 @@ pub fn view_window(app: &AppModel, _id: Id) -> Element<'_, Message> {
             //         }
             //         col.push(meta).into()
             //     }
-            // };
+        }
+    }
+}
 
-            let label = view_clipboard_entry(&app, item);
+pub fn view_window(app: &AppModel, _id: Id) -> Element<'_, Message> {
+    let mut content = widget::list_column().padding([8, 0]).spacing(0);
+
+    if app.history.is_empty() {
+        content = content.add(widget::text::body(fl!("empty")));
+    } else {
+        for (id, item) in app.history.as_slice() {
+            let label = view_clipboard_entry(&app, &item);
 
             // TODO : Swap out for save button if the entry is being edited
             let edit_button = match &item.content {
                 clipboard::ClipboardContent::Text(clipboard_text) => {
                     widget::button::icon(widget::icon::from_name("edit-symbolic").handle())
                         .tooltip(fl!("edit-title"))
-                        .on_press(Message::EditToggled(item.widget_id.clone()))
+                        .on_press(Message::EditToggled(id.clone()))
                         .extra_small()
                         .width(Length::Shrink)
                 }
                 _ => widget::button::icon(widget::icon::from_name("edit-symbolic").handle())
                     .tooltip(fl!("edit-title"))
+                    .on_press(Message::EditToggled(id.clone()))
                     .extra_small()
                     .width(Length::Shrink)
             };
@@ -124,7 +123,7 @@ pub fn view_window(app: &AppModel, _id: Id) -> Element<'_, Message> {
             let remove_button =
                 widget::button::icon(widget::icon::from_name("edit-delete-symbolic").handle())
                     .tooltip(fl!("remove"))
-                    .on_press(Message::RemoveHistory(idx))
+                    .on_press(Message::RemoveHistory(item.widget_id.clone()))
                     .extra_small()
                     .width(Length::Shrink);
             content = content.add(
@@ -133,7 +132,7 @@ pub fn view_window(app: &AppModel, _id: Id) -> Element<'_, Message> {
                     .padding([4, 0])
                     .align_y(Alignment::Center)
                     .push(label)
-                    .push(edit_button)
+                    .push(if app.editing_entry == Some(item.widget_id.clone()) { save_button } else { edit_button })
                     .push(remove_button)
                     .width(Length::Fill),
             );

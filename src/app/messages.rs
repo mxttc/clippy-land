@@ -1,14 +1,15 @@
 use crate::services::clipboard;
 use cosmic::iced::window::Id;
+use cosmic::iced_core;
 
 /// Messages emitted by the application and its widgets.
 #[derive(Debug, Clone)]
 pub enum Message {
     TogglePopup,
-    PopupClosed(Id),
+    PopupClosed(iced_core::window::Id),
     ClipboardChanged(clipboard::ClipboardEntry),
-    RemoveHistory(usize),
-    CopyFromHistory(usize),
+    RemoveHistory(cosmic::widget::Id), // TODO: Verify remove history still works after this change
+    CopyFromHistory(cosmic::widget::Id),
     EditableInputToggled(bool),
     EditableInputChanged(String),
     EditToggled(cosmic::widget::Id),

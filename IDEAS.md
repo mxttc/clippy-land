@@ -1,6 +1,12 @@
 # Ideas
 
-- [ ] Support renaming the content
+- [x] Support renaming the content
+- [x] Fix re-copying into clipboard
+- [x] Fix remove clipboard entry functionality
+- [x] Changed out edit icon for save icon while editing title
+- [x] Support renaming of image clipboard items
+- [ ] Consider showing thumbnails for image clipboard items again
+- [x] Consider fixing pushing most recent items to top
 - [x] Micro-optimization of truncating content display for text
 - [ ] Micro-optimization of truncating content display for images?
 - [ ] Remove all history
@@ -13,3 +19,5 @@
 - [ ] Configuration panel (setings like don't show image thumbnail or snippets directory)
 - [ ] Consider feedback for when user copies an entry
 - [ ] Possible configuration setting: disappear window after selecting an entry
+- [ ] Consider feedback for when user copies an entry
+- [ ] Have an icon specifying if clipboard contents are image or text
