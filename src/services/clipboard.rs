@@ -16,6 +16,7 @@ pub struct ClipboardEntry {
     pub title: String,
     pub content: ClipboardContent, // String or Image
     pub widget_id: cosmic::widget::Id,
+    pub pinned: bool,
     pub editing: bool,
 }
 
@@ -114,6 +115,7 @@ pub fn read_clipboard_entry() -> Option<ClipboardEntry> {
             title: fl!("clipboard-image"),
             content: clipboard_image,
             widget_id: cosmic::widget::Id::unique(),
+            pinned: false,
             editing: false,
         });
     }
@@ -125,8 +127,9 @@ pub fn read_clipboard_entry() -> Option<ClipboardEntry> {
         return Some(ClipboardEntry {
             title: summarize_one_line(&clipboard_text), 
             content: ClipboardContent::Text(clipboard_text), 
-            widget_id: cosmic::widget::Id::unique(), 
-            editing: false 
+            widget_id: cosmic::widget::Id::unique(),
+            pinned: false,
+            editing: false,
         })
     }
 

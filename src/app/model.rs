@@ -10,7 +10,8 @@ use crate::services::clipboard::ClipboardEntry;
 pub struct AppModel {
     pub(super) core: cosmic::Core,
     pub(super) popup: Option<cosmic::iced::window::Id>,
-    /// Latest clipboard entries, newest-first.
-    pub(super) history: IndexMap<Id, ClipboardEntry>, //<clipboard::ClipboardEntry>,
+    pub(super) pinned_clipboard_entries: IndexMap<Id, ClipboardEntry>,
+    pub(super) clipboard_entries: IndexMap<Id, ClipboardEntry>, //<clipboard::ClipboardEntry>,
+    pub(super) search_filter: String,
     pub(super) editing_entry: Option<Id>,
 }

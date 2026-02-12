@@ -48,7 +48,19 @@ pub fn subscription(_app: &AppModel) -> Subscription<Message> {
 }
 
 pub fn on_clear_history(app: &mut AppModel) {
-    app.history.clear()
+    app.clipboard_entries.clear()
+}
+
+pub fn on_toggle_pin_entry(app: &mut AppModel, widget_id: &Id) {
+    if app.clipboard_entries.get(widget_id).is_some() {
+        let mut entry = app.clipboard_entries.shift_remove(widget_id).expect("Moving to pinned clipboard items");
+        entry.pinned = true;
+        app.pinned_clipboard_entries.insert(widget_id.clone(), entry);
+    } else {
+        let mut entry = app.pinned_clipboard_entries.shift_remove(widget_id).expect("Moving to unpinned clipboard items");
+        entry.pinned = false;
+        app.clipboard_entries.insert(widget_id.clone(), entry);
+    }
 }
 
 pub fn update(app: &mut AppModel, message: Message) -> Task<cosmic::Action<Message>> {
@@ -56,9 +68,14 @@ pub fn update(app: &mut AppModel, message: Message) -> Task<cosmic::Action<Messa
         Message::ClipboardChanged(entry) => if let Some(value) = on_clipboard_changed(app, &entry) {
             return value;
         }
-        Message::CopyFromHistory(widget_id) => on_copy_from_history(app, widget_id),
+        Message::CopyFromHistory(widget_id) => {
+            if let Some(new_task) = on_copy_from_history(app, widget_id) {
+                return new_task;
+            }
+        },
         Message::ClearHistory => on_clear_history(app),
         Message::RemoveHistory(widget_id) => on_remove_from_history(app, widget_id),
+        Message::TogglePinEntry(widget_id) => on_toggle_pin_entry(app, &widget_id),
         Message::EditToggled(widget_id) => if let Some(value) = on_edit_toggled(app, widget_id) {
             return value;
         }
@@ -70,7 +87,7 @@ pub fn update(app: &mut AppModel, message: Message) -> Task<cosmic::Action<Messa
                 // }
                 //
                 // app.history.ge
-                if let Some(clipboard_entry) = app.history.get_mut(&entry) {
+                if let Some(clipboard_entry) = app.clipboard_entries.get_mut(&entry) {
                     clipboard_entry.title = new_value.clone();
                 }
             }
@@ -93,6 +110,12 @@ pub fn update(app: &mut AppModel, message: Message) -> Task<cosmic::Action<Messa
             if app.popup.as_ref() == Some(&id) {
                 app.popup = None;
             }
+        }
+        Message::SearchInputToggled(new_value) => {
+            println!("search input toggled: {}", new_value);
+        }
+        Message::SearchInputChanged(new_value) => {
+            app.search_filter = new_value;
         }
         Message::EditableInputToggled(_) => {
             println!("Toggle edit mode for entry");
@@ -131,13 +154,11 @@ fn on_edit_toggled(app: &mut AppModel, widget_id: Id) -> Option<Task<Action<Mess
 }
 
 fn on_remove_from_history(app: &mut AppModel, widget_id: Id) {
-    app.history.shift_remove(&widget_id);
+    app.clipboard_entries.shift_remove(&widget_id);
 }
 
-fn on_copy_from_history(app: &mut AppModel, index: Id) {
-    // TODO: Find entry by widgetId
-
-    if let Some(entry) = app.history.get(&index) {
+fn on_copy_from_history(app: &mut AppModel, index: Id) -> Option<Task<Action<Message>>> {
+    if let Some(entry) = app.clipboard_entries.get(&index) {
         match &entry.content {
             clipboard::ClipboardContent::Text(clipboard_text) => {
                 _ = clipboard::write_clipboard_text(&clipboard_text);
@@ -146,7 +167,11 @@ fn on_copy_from_history(app: &mut AppModel, index: Id) {
                 _ = clipboard::write_clipboard_image(&mime, &*bytes);
             }
         }
+        let app_task = cosmic::Task::done(Message::TogglePopup)
+            .map(cosmic::Action::from);
+        return Some(app_task);
     }
+    None
 }
 
 fn on_clipboard_changed(app: &mut AppModel, entry: &ClipboardEntry) -> Option<Task<Action<Message>>> {
@@ -157,17 +182,17 @@ fn on_clipboard_changed(app: &mut AppModel, entry: &ClipboardEntry) -> Option<Ta
     // }
 
 
-    if let Some(existing_id) = get_entry_by_value(&app.history, entry.content.clone()) {
+    if let Some(existing_id) = get_entry_by_value(&app.clipboard_entries, entry.content.clone()) {
         // Found existing clipboard contents in clipboard history
-        let index_entry = app.history.get_index_entry(existing_id).expect("Should always be able to get it");
+        let index_entry = app.clipboard_entries.get_index_entry(existing_id).expect("Should always be able to get it");
         let index = index_entry.index();
-        app.history.move_index(index, 0);
+        app.clipboard_entries.move_index(index, 0);
     } else {
         // Did not find existing clipboard contents, let's add it
-        app.history.insert_before(0, entry.widget_id.clone(), entry.clone());
+        app.clipboard_entries.insert_before(0, entry.widget_id.clone(), entry.clone());
 
-        if app.history.len() > MAX_HISTORY {
-            app.history.pop();
+        if app.clipboard_entries.len() > MAX_HISTORY {
+            app.clipboard_entries.pop();
         }
     }
 

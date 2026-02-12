@@ -11,6 +11,9 @@ pub enum Message {
     ClearHistory,
     RemoveHistory(cosmic::widget::Id), // TODO: Verify remove history still works after this change
     CopyFromHistory(cosmic::widget::Id),
+    TogglePinEntry(cosmic::widget::Id),
+    SearchInputToggled(bool),
+    SearchInputChanged(String),
     EditableInputToggled(bool),
     EditableInputChanged(String),
     EditToggled(cosmic::widget::Id),
